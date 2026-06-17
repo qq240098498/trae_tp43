@@ -46,12 +46,24 @@ function loadInitialData(): FinancialData {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      return JSON.parse(raw) as FinancialData;
+      const parsed = JSON.parse(raw) as FinancialData;
+      if (
+        parsed.balanceSheets &&
+        parsed.incomeStatements &&
+        parsed.cashFlowStatements &&
+        parsed.balanceSheets.length > 0
+      ) {
+        return parsed;
+      }
     }
   } catch {
     /* ignore */
   }
-  return mockFinancialData;
+  return {
+    balanceSheets: mockFinancialData.balanceSheets.map((bs) => ({ ...bs })),
+    incomeStatements: mockFinancialData.incomeStatements.map((is) => ({ ...is })),
+    cashFlowStatements: mockFinancialData.cashFlowStatements.map((cf) => ({ ...cf })),
+  };
 }
 
 export const useFinancialStore = create<FinancialState>((set, get) => {
@@ -86,7 +98,9 @@ export const useFinancialStore = create<FinancialState>((set, get) => {
     },
 
     setData: (data) => {
-      set({ data });
+      const maxIndex = Math.max(0, data.balanceSheets.length - 1);
+      const safeIndex = Math.min(get().selectedPeriodIndex, maxIndex);
+      set({ data, selectedPeriodIndex: safeIndex });
       get().recalculateAll();
     },
 
@@ -116,8 +130,30 @@ export const useFinancialStore = create<FinancialState>((set, get) => {
     exportToJSON: () => JSON.stringify(get().data, null, 2),
 
     resetToMock: () => {
-      set({ data: mockFinancialData });
-      get().recalculateAll();
+      const freshData: FinancialData = {
+        balanceSheets: mockFinancialData.balanceSheets.map((bs) => ({ ...bs })),
+        incomeStatements: mockFinancialData.incomeStatements.map((is) => ({ ...is })),
+        cashFlowStatements: mockFinancialData.cashFlowStatements.map((cf) => ({ ...cf })),
+      };
+      const validation = validateAllData(freshData);
+      const ratios = calculateAllRatios(freshData);
+      const anomalies = detectAllAnomalies(freshData, ratios);
+      const healthScore = calculateHealthScore(ratios);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(freshData));
+      } catch {
+        /* ignore */
+      }
+      set({
+        data: freshData,
+        validation,
+        ratios,
+        anomalies,
+        healthScore,
+        selectedPeriodIndex: 0,
+        sourcePanelOpen: false,
+        sourcePanelContent: null,
+      });
     },
   };
 });
