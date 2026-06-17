@@ -4,8 +4,12 @@ import type {
   AnomalyRecord,
   HealthScore,
   InterpretationLevel,
+  VisualizationAdvice,
+  PeerAnalysisSummary,
+  SubsidiaryFinancialData,
 } from '@/types/financial';
 import { getRatiosByCategory, getLatestPair } from '../financial/calculator';
+import { generateAllVisualizationAdvice } from './visualizationAdvisor';
 
 export function calculateHealthScore(ratios: FinancialRatio[]): HealthScore {
   const levelToScore: Record<InterpretationLevel, number> = {
@@ -63,6 +67,7 @@ export interface ReportData {
   score: HealthScore;
   sections: ReportSection[];
   appendix: ReportSection;
+  visualizationAdvices?: VisualizationAdvice[];
 }
 
 function levelText(level: InterpretationLevel): string {
@@ -257,5 +262,99 @@ export function generateReport(
     score,
     sections,
     appendix,
+  };
+}
+
+export function generateVisualizationSection(
+  advices: VisualizationAdvice[]
+): ReportSection {
+  const paragraphs: string[] = [];
+
+  paragraphs.push('为提高汇报效率、减少制图环节的沟通成本，本报告根据核心分析结论自动推荐适配的可视化图表方案。以下为各分析维度的图表建议，包含图表类型、标题、坐标轴标注与设计规范，可直接用于汇报材料制作。');
+
+  const categoryMap: Record<string, VisualizationAdvice[]> = {};
+  for (const advice of advices) {
+    if (!categoryMap[advice.categoryLabel]) {
+      categoryMap[advice.categoryLabel] = [];
+    }
+    categoryMap[advice.categoryLabel].push(advice);
+  }
+
+  for (const [categoryName, categoryAdvices] of Object.entries(categoryMap)) {
+    paragraphs.push(`【${categoryName}类分析】`);
+
+    for (const advice of categoryAdvices) {
+      const priorityText = advice.priority === 'high' ? '优先推荐' : advice.priority === 'medium' ? '可选推荐' : '辅助参考';
+      paragraphs.push(`• ${priorityText}｜${advice.conclusion}`);
+
+      for (const rec of advice.recommendations) {
+        paragraphs.push(`  ▸ 图表类型：${rec.chartTypeName}`);
+        paragraphs.push(`  ▸ 图表标题：${rec.chartTitle}`);
+        if (rec.chartSubtitle) {
+          paragraphs.push(`  ▸ 副标题：${rec.chartSubtitle}`);
+        }
+        paragraphs.push(`  ▸ 用途说明：${rec.purpose}`);
+
+        if (rec.axisConfig.xAxisLabel || rec.axisConfig.yAxisLabel) {
+          paragraphs.push(`  ▸ 坐标轴标注：`);
+          if (rec.axisConfig.xAxisLabel) {
+            paragraphs.push(`    - X轴：${rec.axisConfig.xAxisLabel}`);
+          }
+          if (rec.axisConfig.yAxisLabel) {
+            paragraphs.push(`    - Y轴：${rec.axisConfig.yAxisLabel}`);
+          }
+          paragraphs.push(`    - 数据标签：${rec.axisConfig.dataLabel}（${rec.axisConfig.unit}）`);
+        }
+
+        if (rec.dataSeries.length > 0) {
+          paragraphs.push(`  ▸ 数据系列（${rec.dataSeries.length}项）：`);
+          for (let i = 0; i < Math.min(rec.dataSeries.length, 5); i++) {
+            const series = rec.dataSeries[i];
+            paragraphs.push(`    ${i + 1}. ${series.name}：${series.description}`);
+          }
+          if (rec.dataSeries.length > 5) {
+            paragraphs.push(`    ... 等共 ${rec.dataSeries.length} 项数据系列`);
+          }
+        }
+
+        if (rec.designTips.length > 0) {
+          paragraphs.push(`  ▸ 设计建议：`);
+          for (let i = 0; i < Math.min(rec.designTips.length, 4); i++) {
+            paragraphs.push(`    - ${rec.designTips[i]}`);
+          }
+        }
+
+        paragraphs.push('');
+      }
+    }
+
+    paragraphs.push('');
+  }
+
+  paragraphs.push('※ 注：以上图表建议由系统根据分析结论类型自动生成，实际制作时可根据汇报场景与受众需求适当调整。建议优先选择「优先推荐」级别的图表方案，确保信息传达的准确性与专业性。');
+
+  return {
+    id: 'visualization',
+    title: '六、可视化图表建议',
+    level: 1,
+    paragraphs,
+  };
+}
+
+export function generateReportWithVisualization(
+  data: FinancialData,
+  ratios: FinancialRatio[],
+  anomalies: AnomalyRecord[],
+  peerSummary: PeerAnalysisSummary,
+  subsidiaries: SubsidiaryFinancialData[]
+): ReportData {
+  const baseReport = generateReport(data, ratios, anomalies);
+  const visualizationAdvices = generateAllVisualizationAdvice(ratios, peerSummary, subsidiaries);
+  const visualizationSection = generateVisualizationSection(visualizationAdvices);
+
+  return {
+    ...baseReport,
+    sections: [...baseReport.sections, visualizationSection],
+    visualizationAdvices,
   };
 }

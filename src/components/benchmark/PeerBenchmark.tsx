@@ -33,6 +33,8 @@ import {
   findStrongSubsidiaries,
   findWeakSubsidiaries,
 } from '@/utils/financial/peerBenchmark';
+import { generateAllVisualizationAdvice } from '@/utils/interpreter/visualizationAdvisor';
+import VisualizationAdvisor from '@/components/benchmark/VisualizationAdvisor';
 import {
   detectMeanDeviationAnomalies,
   getMeanDeviationAnomalySummary,
@@ -1226,6 +1228,22 @@ export default function PeerBenchmark() {
 
   const groupAdvice = getSummaryAdvice(groupSummary);
 
+  const visualizationAdvices = useMemo(
+    () => generateAllVisualizationAdvice(ratios, groupSummary, subsidiaries),
+    [ratios, groupSummary, subsidiaries]
+  );
+
+  const currentVisualizationAdvices = useMemo(() => {
+    if (selectedSubsidiaryId && selectedAnalysis) {
+      return generateAllVisualizationAdvice(
+        selectedSubsidiary?.ratios ?? [],
+        selectedAnalysis.summary,
+        []
+      );
+    }
+    return visualizationAdvices;
+  }, [selectedSubsidiaryId, selectedAnalysis, selectedSubsidiary, visualizationAdvices]);
+
   const handleSubsidiarySelect = (id: string) => {
     if (id === '') {
       setSelectedSubsidiaryId(null);
@@ -1279,7 +1297,8 @@ export default function PeerBenchmark() {
       </div>
 
       {viewMode === 'group' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in-up stagger-1">
+        <div className="space-y-6 animate-fade-in-up stagger-1">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <SummaryCard
@@ -1394,6 +1413,9 @@ export default function PeerBenchmark() {
             <ContributionOverview subsidiaries={subsidiaries} />
           </div>
         </div>
+
+          <VisualizationAdvisor advices={visualizationAdvices} />
+        </div>
       )}
 
       {viewMode === 'comparison' && (
@@ -1418,6 +1440,8 @@ export default function PeerBenchmark() {
               onSelect={handleSubsidiarySelect}
             />
           </div>
+
+          <VisualizationAdvisor advices={visualizationAdvices} />
         </div>
       )}
 
@@ -1493,6 +1517,10 @@ export default function PeerBenchmark() {
                 />
               ))}
             </div>
+          </div>
+
+          <div className="animate-fade-in-up stagger-4">
+            <VisualizationAdvisor advices={currentVisualizationAdvices} />
           </div>
         </>
       )}

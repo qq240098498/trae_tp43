@@ -252,6 +252,41 @@ export interface PeerBenchmarkResult {
   bottomPeers: { name: string; value: number }[];
 }
 
+export type ChartType = 'line' | 'bar' | 'pie' | 'waterfall' | 'column' | 'area';
+
+export type AnalysisCategory = 'trend' | 'structure' | 'comparison' | 'composition' | 'distribution';
+
+export interface ChartAxisConfig {
+  xAxisLabel: string;
+  yAxisLabel: string;
+  dataLabel: string;
+  unit: string;
+}
+
+export interface ChartRecommendation {
+  chartType: ChartType;
+  chartTypeName: string;
+  chartTitle: string;
+  chartSubtitle?: string;
+  purpose: string;
+  axisConfig: ChartAxisConfig;
+  dataSeries: {
+    name: string;
+    description: string;
+  }[];
+  designTips: string[];
+  suitableForReport: boolean;
+}
+
+export interface VisualizationAdvice {
+  id: string;
+  category: AnalysisCategory;
+  categoryLabel: string;
+  conclusion: string;
+  recommendations: ChartRecommendation[];
+  priority: 'high' | 'medium' | 'low';
+}
+
 export interface PeerAnalysisSummary {
   industryInfo: IndustryInfo;
   totalPeers: number;
