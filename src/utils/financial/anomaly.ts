@@ -188,6 +188,54 @@ const POSSIBLE_REASONS_MAP: Record<string, string[]> = {
     '三大活动现金流的综合结果',
     '汇率变动对现金的影响',
   ],
+  // 比率指标
+  'gross-margin': [
+    '产品销售价格调整',
+    '原材料/人工成本大幅波动',
+    '产品结构变化（高毛利/低毛利产品占比变化）',
+    '生产效率变化（良品率、产能利用率）',
+    '成本核算方法变更',
+  ],
+  'net-margin': [
+    '毛利率变动的传导影响',
+    '期间费用率大幅变化',
+    '非经常性损益（政府补助、资产处置）',
+    '所得税政策或税率变化',
+    '投资收益或公允价值变动损益波动',
+  ],
+  'debt-ratio': [
+    '大规模举债融资（如扩产、并购）',
+    '偿还债务降低杠杆',
+    '利润留存积累增加净资产',
+    '亏损侵蚀所有者权益',
+    '资产重估或会计政策变更影响',
+  ],
+  'current-ratio': [
+    '流动资产大幅增减（货币资金、应收、存货）',
+    '流动负债大幅变化（短期借款、应付账款）',
+    '长短期债务结构调整',
+    '营运资金管理策略变化',
+  ],
+  'operating-margin': [
+    '毛利率变动影响',
+    '销售费用率/管理费用率大幅变化',
+    '研发费用投入增减',
+    '经营效率提升或下降',
+    '业务结构变化',
+  ],
+  'inventory-turnover': [
+    '销售速度变化（市场需求波动）',
+    '库存策略调整（安全库存、JIT）',
+    '产品结构变化影响周转速度',
+    '供应链效率变化',
+    '滞销库存增加或清理',
+  ],
+  'roe': [
+    '盈利能力变化（净利率变动）',
+    '资产运营效率变化（资产周转率）',
+    '资本结构调整（权益乘数变化）',
+    '净资产规模变化（增资、分红、亏损）',
+  ],
 };
 
 function recordFromField<T extends object>(
@@ -423,6 +471,285 @@ export function getAnomalyCounts(records: AnomalyRecord[]) {
     notice: records.filter((r) => r.severity === 'notice').length,
     total: records.length,
   };
+}
+
+const MEAN_DEVIATION_THRESHOLD = 0.15;
+const MIN_SAMPLE_COUNT = 2;
+
+function calcMean(values: number[]): number {
+  if (values.length === 0) return 0;
+  return values.reduce((sum, v) => sum + v, 0) / values.length;
+}
+
+function calcStdDev(values: number[], mean: number): number {
+  if (values.length < 2) return 0;
+  const squaredDiffs = values.map((v) => Math.pow(v - mean, 2));
+  const avgSquaredDiff = squaredDiffs.reduce((sum, v) => sum + v, 0) / values.length;
+  return Math.sqrt(avgSquaredDiff);
+}
+
+interface HistoricalIndicator {
+  name: string;
+  fieldKey: string;
+  statementType: StatementType;
+  values: { period: string; value: number }[];
+}
+
+function extractBalanceSheetIndicators(data: FinancialData): HistoricalIndicator[] {
+  const fields: [string, string][] = [
+    ['货币资金', 'cash'],
+    ['应收账款', 'accountsReceivable'],
+    ['存货', 'inventory'],
+    ['流动资产合计', 'totalCurrentAssets'],
+    ['固定资产净额', 'fixedAssetsNet'],
+    ['资产总计', 'totalAssets'],
+    ['短期借款', 'shortTermBorrowings'],
+    ['应付账款', 'accountsPayable'],
+    ['流动负债合计', 'totalCurrentLiabilities'],
+    ['长期借款', 'longTermBorrowings'],
+    ['负债总计', 'totalLiabilities'],
+    ['所有者权益合计', 'totalEquity'],
+  ];
+
+  const sorted = [...data.balanceSheets].sort((a, b) =>
+    a.period < b.period ? -1 : 1
+  );
+
+  return fields.map(([name, key]) => ({
+    name,
+    fieldKey: key,
+    statementType: 'balance' as StatementType,
+    values: sorted.map((bs) => ({
+      period: bs.period,
+      value: (bs as unknown as Record<string, number>)[key],
+    })),
+  }));
+}
+
+function extractIncomeStatementIndicators(data: FinancialData): HistoricalIndicator[] {
+  const fields: [string, string][] = [
+    ['营业收入', 'revenue'],
+    ['营业成本', 'costOfRevenue'],
+    ['毛利润', 'grossProfit'],
+    ['销售费用', 'sellingExpenses'],
+    ['管理费用', 'adminExpenses'],
+    ['财务费用', 'financialExpenses'],
+    ['研发费用', 'rndExpenses'],
+    ['营业利润', 'operatingProfit'],
+    ['利润总额', 'totalProfit'],
+    ['净利润', 'netProfit'],
+  ];
+
+  const sorted = [...data.incomeStatements].sort((a, b) =>
+    a.period < b.period ? -1 : 1
+  );
+
+  return fields.map(([name, key]) => ({
+    name,
+    fieldKey: key,
+    statementType: 'income' as StatementType,
+    values: sorted.map((is) => ({
+      period: is.period,
+      value: (is as unknown as Record<string, number>)[key],
+    })),
+  }));
+}
+
+function extractCashFlowIndicators(data: FinancialData): HistoricalIndicator[] {
+  const fields: [string, string][] = [
+    ['经营活动净现金流', 'operatingNetCashFlow'],
+    ['投资活动净现金流', 'investingNetCashFlow'],
+    ['筹资活动净现金流', 'financingNetCashFlow'],
+    ['现金净增加额', 'netIncreaseInCash'],
+  ];
+
+  const sorted = [...data.cashFlowStatements].sort((a, b) =>
+    a.period < b.period ? -1 : 1
+  );
+
+  return fields.map(([name, key]) => ({
+    name,
+    fieldKey: key,
+    statementType: 'cashflow' as StatementType,
+    values: sorted.map((cf) => ({
+      period: cf.period,
+      value: (cf as unknown as Record<string, number>)[key],
+    })),
+  }));
+}
+
+function extractRatioIndicators(data: FinancialData): HistoricalIndicator[] {
+  const bsSorted = [...data.balanceSheets].sort((a, b) =>
+    a.period < b.period ? -1 : 1
+  );
+  const isSorted = [...data.incomeStatements].sort((a, b) =>
+    a.period < b.period ? -1 : 1
+  );
+
+  const ratios: { name: string; fieldKey: string; calc: (bs: BalanceSheet, is: IncomeStatement, prevBs: BalanceSheet | null) => number | null }[] = [
+    {
+      name: '毛利率',
+      fieldKey: 'gross-margin',
+      calc: (bs, is) => is.revenue !== 0 ? is.grossProfit / is.revenue : null,
+    },
+    {
+      name: '净利率',
+      fieldKey: 'net-margin',
+      calc: (bs, is) => is.revenue !== 0 ? is.netProfit / is.revenue : null,
+    },
+    {
+      name: '资产负债率',
+      fieldKey: 'debt-ratio',
+      calc: (bs) => bs.totalAssets !== 0 ? bs.totalLiabilities / bs.totalAssets : null,
+    },
+    {
+      name: '流动比率',
+      fieldKey: 'current-ratio',
+      calc: (bs) => bs.totalCurrentLiabilities !== 0 ? bs.totalCurrentAssets / bs.totalCurrentLiabilities : null,
+    },
+    {
+      name: '营业利润率',
+      fieldKey: 'operating-margin',
+      calc: (bs, is) => is.revenue !== 0 ? is.operatingProfit / is.revenue : null,
+    },
+    {
+      name: '存货周转率',
+      fieldKey: 'inventory-turnover',
+      calc: (bs, is) => bs.inventory !== 0 ? is.costOfRevenue / bs.inventory : null,
+    },
+    {
+      name: 'ROE',
+      fieldKey: 'roe',
+      calc: (bs, is) => bs.totalEquity !== 0 ? is.netProfit / bs.totalEquity : null,
+    },
+  ];
+
+  return ratios.map((r) => {
+    const values: { period: string; value: number }[] = [];
+    for (let i = 0; i < isSorted.length; i++) {
+      const bs = bsSorted[i];
+      const is = isSorted[i];
+      const prevBs = i > 0 ? bsSorted[i - 1] : null;
+      if (bs && is) {
+        const val = r.calc(bs, is, prevBs);
+        if (val !== null && val !== undefined && !isNaN(val)) {
+          values.push({ period: is.period, value: val });
+        }
+      }
+    }
+    return {
+      name: r.name,
+      fieldKey: r.fieldKey,
+      statementType: 'ratio' as StatementType,
+      values,
+    };
+  });
+}
+
+export function detectMeanDeviationAnomalies(
+  data: FinancialData,
+  maxPeriods: number = 8
+): AnomalyRecord[] {
+  const indicators: HistoricalIndicator[] = [
+    ...extractBalanceSheetIndicators(data),
+    ...extractIncomeStatementIndicators(data),
+    ...extractCashFlowIndicators(data),
+    ...extractRatioIndicators(data),
+  ];
+
+  const anomalies: AnomalyRecord[] = [];
+
+  for (const indicator of indicators) {
+    const validValues = indicator.values.filter(
+      (v) => v.value !== null && v.value !== undefined && !isNaN(v.value)
+    );
+
+    if (validValues.length < MIN_SAMPLE_COUNT) continue;
+
+    const recentValues = validValues.slice(-maxPeriods);
+    const current = recentValues[recentValues.length - 1];
+    const historical = recentValues.slice(0, -1);
+
+    if (historical.length === 0) continue;
+
+    const historicalNums = historical.map((v) => v.value);
+    const mean = calcMean(historicalNums);
+    const stdDev = calcStdDev(historicalNums, mean);
+
+    if (mean === 0) continue;
+
+    const deviation = (current.value - mean) / Math.abs(mean);
+
+    if (Math.abs(deviation) >= MEAN_DEVIATION_THRESHOLD) {
+      const severity: AnomalySeverity =
+        Math.abs(deviation) >= 0.5 ? 'critical' :
+        Math.abs(deviation) >= 0.3 ? 'warning' : 'notice';
+
+      const prevValue = historical[historical.length - 1]?.value ?? 0;
+      const changeAmt = current.value - prevValue;
+      const changeRt = prevValue !== 0 ? changeAmt / prevValue : 0;
+
+      anomalies.push({
+        id: `mean-dev-${indicator.statementType}-${indicator.fieldKey}-${current.period}`,
+        indicatorName: indicator.name,
+        statementType: indicator.statementType,
+        fieldKey: indicator.fieldKey,
+        currentPeriod: current.period,
+        previousPeriod: historical[historical.length - 1]?.period ?? '',
+        currentValue: current.value,
+        previousValue: prevValue,
+        changeAmount: changeAmt,
+        changeRate: changeRt,
+        severity,
+        threshold: MEAN_DEVIATION_THRESHOLD,
+        possibleReasons: POSSIBLE_REASONS_MAP[indicator.fieldKey] ?? [
+          '业务规模变化',
+          '相关政策与策略调整',
+          '外部市场环境变化',
+          '会计估计或政策变更',
+        ],
+        sourceTrace: `均值偏离分析 · ${indicator.name} · 基于${historical.length}期历史数据`,
+        historicalMean: mean,
+        historicalStdDev: stdDev,
+        deviationFromMean: deviation,
+        deviationType: deviation >= 0 ? 'above' : 'below',
+        sampleCount: historical.length,
+        anomalyType: 'mean-deviation',
+      });
+    }
+  }
+
+  const severityOrder: Record<AnomalySeverity, number> = {
+    critical: 0,
+    warning: 1,
+    notice: 2,
+  };
+  anomalies.sort((a, b) => {
+    const s = severityOrder[a.severity] - severityOrder[b.severity];
+    if (s !== 0) return s;
+    return Math.abs(b.deviationFromMean ?? 0) - Math.abs(a.deviationFromMean ?? 0);
+  });
+
+  return anomalies;
+}
+
+export function getMeanDeviationAnomalySummary(anomalies: AnomalyRecord[]) {
+  const meanDevAnomalies = anomalies.filter((a) => a.anomalyType === 'mean-deviation');
+  return {
+    total: meanDevAnomalies.length,
+    critical: meanDevAnomalies.filter((a) => a.severity === 'critical').length,
+    warning: meanDevAnomalies.filter((a) => a.severity === 'warning').length,
+    notice: meanDevAnomalies.filter((a) => a.severity === 'notice').length,
+  };
+}
+
+export function getMeanDeviationAnomalyByField(
+  anomalies: AnomalyRecord[],
+  fieldKey: string
+): AnomalyRecord | undefined {
+  return anomalies.find(
+    (a) => a.anomalyType === 'mean-deviation' && a.fieldKey === fieldKey
+  );
 }
 
 export { changeRate, changeAmount };

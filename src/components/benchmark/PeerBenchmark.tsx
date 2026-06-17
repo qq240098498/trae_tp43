@@ -22,6 +22,8 @@ import {
   Landmark,
   Globe2,
   Box,
+  Zap,
+  Search,
 } from 'lucide-react';
 import { useFinancialStore } from '@/store/useFinancialStore';
 import {
@@ -31,6 +33,11 @@ import {
   findStrongSubsidiaries,
   findWeakSubsidiaries,
 } from '@/utils/financial/peerBenchmark';
+import {
+  detectMeanDeviationAnomalies,
+  getMeanDeviationAnomalySummary,
+  getMeanDeviationAnomalyByField,
+} from '@/utils/financial/anomaly';
 import {
   formatPercent,
   formatTimes,
@@ -44,6 +51,7 @@ import type {
   SubsidiaryPeerAnalysis,
   PercentileLevel,
   SubsidiaryFinancialData,
+  AnomalyRecord,
 } from '@/types/financial';
 import type { LucideIcon } from 'lucide-react';
 
@@ -91,6 +99,200 @@ function getSubsidiaryIcon(industry: string): LucideIcon {
     default:
       return Building;
   }
+}
+
+function getSeverityColorClass(severity: string): string {
+  switch (severity) {
+    case 'critical':
+      return 'bg-danger-500';
+    case 'warning':
+      return 'bg-warn-500';
+    case 'notice':
+      return 'bg-neutral-400';
+    default:
+      return 'bg-neutral-300';
+  }
+}
+
+function getSeverityTextClass(severity: string): string {
+  switch (severity) {
+    case 'critical':
+      return 'text-danger-600';
+    case 'warning':
+      return 'text-warn-600';
+    case 'notice':
+      return 'text-neutral-600';
+    default:
+      return 'text-neutral-500';
+  }
+}
+
+function getSeverityLabel(severity: string): string {
+  switch (severity) {
+    case 'critical':
+      return '严重偏离';
+    case 'warning':
+      return '显著偏离';
+    case 'notice':
+      return '轻度偏离';
+    default:
+      return '正常';
+  }
+}
+
+function AnomalyWarningCard({ anomalies }: { anomalies: AnomalyRecord[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const summary = getMeanDeviationAnomalySummary(anomalies);
+  const meanDevAnomalies = anomalies.filter((a) => a.anomalyType === 'mean-deviation');
+
+  if (summary.total === 0) return null;
+
+  return (
+    <div className="card-base p-5 border-l-4 border-l-danger-500 animate-fade-in-up">
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div className="flex items-start gap-3">
+          <div className="p-2 rounded-lg bg-danger-100 text-danger-600 shrink-0">
+            <Zap className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="font-display text-base font-semibold text-neutral-800">
+              异常值预警
+            </h3>
+            <p className="text-xs text-neutral-500 mt-0.5">
+              基于近8期历史均值与标准差分析，当前偏离超过15%的财务指标
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {summary.critical > 0 && (
+            <span className="chip !text-[10px] bg-danger-50 text-danger-700 border-danger-200">
+              严重 {summary.critical}
+            </span>
+          )}
+          {summary.warning > 0 && (
+            <span className="chip !text-[10px] bg-warn-50 text-warn-700 border-warn-200">
+              显著 {summary.warning}
+            </span>
+          )}
+          {summary.notice > 0 && (
+            <span className="chip !text-[10px] bg-neutral-100 text-neutral-600 border-neutral-200">
+              轻度 {summary.notice}
+            </span>
+          )}
+        </div>
+      </div>
+
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium text-neutral-500 hover:text-danger-700 hover:bg-danger-50/50 transition-colors"
+      >
+        <span className="flex items-center gap-1.5">
+          <AlertTriangle className="w-3.5 h-3.5" />
+          查看异常指标详情
+        </span>
+        {expanded ? (
+          <ChevronUp className="w-4 h-4" />
+        ) : (
+          <ChevronDown className="w-4 h-4" />
+        )}
+      </button>
+
+      {expanded && (
+        <div className="mt-3 space-y-3 animate-fade-in-up">
+          {meanDevAnomalies.map((anomaly) => (
+            <div
+              key={anomaly.id}
+              className="p-3 rounded-lg bg-neutral-50 border border-neutral-200 hover:border-danger-200 transition-colors"
+            >
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span
+                    className={cn(
+                      'w-2 h-2 rounded-full shrink-0',
+                      getSeverityColorClass(anomaly.severity)
+                    )}
+                  />
+                  <span className="font-medium text-neutral-800 text-sm truncate">
+                    {anomaly.indicatorName}
+                  </span>
+                  <span
+                    className={cn(
+                      'chip !text-[10px] shrink-0',
+                      anomaly.severity === 'critical'
+                        ? 'bg-danger-50 text-danger-700 border-danger-200'
+                        : anomaly.severity === 'warning'
+                        ? 'bg-warn-50 text-warn-700 border-warn-200'
+                        : 'bg-neutral-100 text-neutral-600 border-neutral-200'
+                    )}
+                  >
+                    {getSeverityLabel(anomaly.severity)}
+                  </span>
+                </div>
+                <span
+                  className={cn(
+                    'font-mono text-sm font-bold shrink-0',
+                    getSeverityTextClass(anomaly.severity)
+                  )}
+                >
+                  {anomaly.deviationFromMean && anomaly.deviationFromMean >= 0
+                    ? '+'
+                    : ''}
+                  {formatPercent(anomaly.deviationFromMean ?? 0)}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 mb-3 text-xs">
+                <div>
+                  <div className="text-neutral-400 mb-0.5">本期值</div>
+                  <div className="font-mono font-semibold text-neutral-700">
+                    {formatNumber(anomaly.currentValue)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-neutral-400 mb-0.5">历史均值</div>
+                  <div className="font-mono font-semibold text-neutral-700">
+                    {formatNumber(anomaly.historicalMean ?? 0)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-neutral-400 mb-0.5">标准差</div>
+                  <div className="font-mono font-semibold text-neutral-700">
+                    {formatNumber(anomaly.historicalStdDev ?? 0)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-neutral-200">
+                <div className="flex items-center gap-1.5 text-[11px] font-medium text-neutral-600 mb-1.5">
+                  <Search className="w-3 h-3" />
+                  可能的驱动因素
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {anomaly.possibleReasons.slice(0, 3).map((reason, idx) => (
+                    <span
+                      key={idx}
+                      className="text-[10px] px-2 py-0.5 rounded-md bg-neutral-100 text-neutral-600 border border-neutral-200"
+                    >
+                      {reason}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-2 pt-2 border-t border-neutral-200">
+                <div className="text-[11px] text-neutral-500 flex items-start gap-1.5">
+                  <Info className="w-3 h-3 mt-0.5 shrink-0 text-neutral-400" />
+                  <span>
+                    基于 {anomaly.sampleCount} 期历史数据分析，建议进一步核查{anomaly.indicatorName}变动原因，关注是否存在政策变更、业务调整或异常交易等情况。
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function SummaryCard({
@@ -215,11 +417,15 @@ function BenchmarkBar({ benchmark }: { benchmark: PeerBenchmarkResult }) {
   );
 }
 
-function BenchmarkCard({ benchmark }: { benchmark: PeerBenchmarkResult }) {
+function BenchmarkCard({ benchmark, anomaly }: { benchmark: PeerBenchmarkResult; anomaly?: AnomalyRecord }) {
   const [expanded, setExpanded] = useState(false);
+  const hasMeanDeviation = anomaly?.anomalyType === 'mean-deviation';
 
   return (
-    <div className="card-base p-5 animate-fade-in-up">
+    <div className={cn(
+      'card-base p-5 animate-fade-in-up transition-all',
+      hasMeanDeviation && 'ring-2 ring-danger-400 border-danger-300'
+    )}>
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -232,6 +438,12 @@ function BenchmarkCard({ benchmark }: { benchmark: PeerBenchmarkResult }) {
             >
               {benchmark.percentileText}
             </span>
+            {hasMeanDeviation && (
+              <span className="chip !text-[10px] bg-danger-50 text-danger-700 border-danger-200 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3" />
+                异常偏离
+              </span>
+            )}
           </div>
           <div className="flex items-baseline gap-3">
             <span className="font-mono text-2xl font-bold text-neutral-800">
@@ -305,6 +517,52 @@ function BenchmarkCard({ benchmark }: { benchmark: PeerBenchmarkResult }) {
               </div>
             </div>
           </div>
+
+          {hasMeanDeviation && anomaly && (
+            <div className="p-3 rounded-lg bg-danger-50/50 border border-danger-200">
+              <div className="flex items-center gap-1.5 text-[10px] font-medium text-danger-600 uppercase tracking-wider mb-2">
+                <AlertTriangle className="w-3 h-3" />
+                异常值预警 · 历史均值偏离分析
+              </div>
+              <div className="grid grid-cols-3 gap-2 mb-2 text-xs">
+                <div>
+                  <div className="text-neutral-500 mb-0.5">历史均值</div>
+                  <div className="font-mono font-semibold text-neutral-700">
+                    {formatBenchmarkValue(anomaly.historicalMean ?? 0, benchmark.ratioUnit)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-neutral-500 mb-0.5">偏离幅度</div>
+                  <div className={cn(
+                    'font-mono font-semibold',
+                    getSeverityTextClass(anomaly.severity)
+                  )}>
+                    {anomaly.deviationFromMean && anomaly.deviationFromMean >= 0 ? '+' : ''}
+                    {formatPercent(anomaly.deviationFromMean ?? 0)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-neutral-500 mb-0.5">样本期数</div>
+                  <div className="font-mono font-semibold text-neutral-700">
+                    {anomaly.sampleCount ?? 0} 期
+                  </div>
+                </div>
+              </div>
+              <div className="pt-2 border-t border-danger-200/50">
+                <div className="text-[11px] font-medium text-danger-700 mb-1">可能的驱动因素</div>
+                <div className="flex flex-wrap gap-1">
+                  {anomaly.possibleReasons.slice(0, 3).map((reason, idx) => (
+                    <span
+                      key={idx}
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-white text-neutral-600 border border-danger-200"
+                    >
+                      {reason}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="p-3 rounded-lg bg-accent-50/50 border border-accent-100">
@@ -846,6 +1104,8 @@ export default function PeerBenchmark() {
 
   const groupSummary = useMemo(() => runPeerBenchmarkAnalysis(data, ratios), [data, ratios]);
 
+  const meanDevAnomalies = useMemo(() => detectMeanDeviationAnomalies(data, 8), [data]);
+
   const subsidiaryAnalyses = useMemo(
     () => runAllSubsidiariesBenchmarkAnalysis(subsidiaries),
     [subsidiaries]
@@ -863,6 +1123,20 @@ export default function PeerBenchmark() {
   const selectedAnalysis = useMemo(
     () => subsidiaryAnalyses.find((a) => a.subsidiaryId === selectedSubsidiaryId) || null,
     [subsidiaryAnalyses, selectedSubsidiaryId]
+  );
+
+  const selectedSubsidiary = useMemo(
+    () => subsidiaries.find((s) => s.id === selectedSubsidiaryId) || null,
+    [subsidiaries, selectedSubsidiaryId]
+  );
+
+  const currentData = selectedSubsidiaryId
+    ? selectedSubsidiary?.data ?? data
+    : data;
+
+  const currentMeanDevAnomalies = useMemo(
+    () => detectMeanDeviationAnomalies(currentData, 8),
+    [currentData]
   );
 
   const currentSummary = selectedSubsidiaryId
@@ -974,6 +1248,8 @@ export default function PeerBenchmark() {
                 </div>
               </div>
             </div>
+
+            <AnomalyWarningCard anomalies={meanDevAnomalies} />
 
             {(strongSubs.length > 0 || weakSubs.length > 0) && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1119,6 +1395,8 @@ export default function PeerBenchmark() {
             </div>
           </div>
 
+          <AnomalyWarningCard anomalies={currentMeanDevAnomalies} />
+
           <div className="animate-fade-in-up stagger-4">
             <div className="flex items-center gap-2 mb-3">
               <TrendingUp className="w-5 h-5 text-brand-600" />
@@ -1131,7 +1409,11 @@ export default function PeerBenchmark() {
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {currentSummary.benchmarks.map((b) => (
-                <BenchmarkCard key={b.ratioId} benchmark={b} />
+                <BenchmarkCard
+                  key={b.ratioId}
+                  benchmark={b}
+                  anomaly={getMeanDeviationAnomalyByField(currentMeanDevAnomalies, b.ratioId)}
+                />
               ))}
             </div>
           </div>

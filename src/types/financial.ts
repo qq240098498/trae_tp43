@@ -132,6 +132,12 @@ export interface AnomalyRecord {
   threshold: number;
   possibleReasons: string[];
   sourceTrace: string;
+  historicalMean?: number;
+  historicalStdDev?: number;
+  deviationFromMean?: number;
+  deviationType?: 'above' | 'below';
+  sampleCount?: number;
+  anomalyType?: 'period-over-period' | 'mean-deviation' | 'threshold';
 }
 
 export interface ValidationResult {
