@@ -154,3 +154,62 @@ export interface HealthScore {
   growth: number;
   level: InterpretationLevel;
 }
+
+export type IndustryCategory =
+  | 'manufacturing'
+  | 'retail'
+  | 'technology'
+  | 'services'
+  | 'realestate'
+  | 'finance';
+
+export type CompanyScale = 'small' | 'medium' | 'large' | 'xlarge';
+
+export interface IndustryInfo {
+  industry: IndustryCategory;
+  industryLabel: string;
+  scale: CompanyScale;
+  scaleLabel: string;
+}
+
+export interface PeerCompany {
+  id: string;
+  name: string;
+  stockCode: string;
+  industry: IndustryCategory;
+  scale: CompanyScale;
+  revenue: number;
+  totalAssets: number;
+  ratios: Record<string, number>;
+}
+
+export type PercentileLevel = 'top10' | 'top25' | 'top50' | 'bottom50' | 'bottom25';
+
+export interface PeerBenchmarkResult {
+  ratioId: string;
+  ratioName: string;
+  ratioUnit: string;
+  companyValue: number | null;
+  industryMin: number;
+  industryMax: number;
+  industryMean: number;
+  industryMedian: number;
+  industryP25: number;
+  industryP75: number;
+  percentile: number;
+  percentileLevel: PercentileLevel;
+  percentileText: string;
+  higherIsBetter: boolean;
+  sampleCount: number;
+  topPeers: { name: string; value: number }[];
+  bottomPeers: { name: string; value: number }[];
+}
+
+export interface PeerAnalysisSummary {
+  industryInfo: IndustryInfo;
+  totalPeers: number;
+  topTierCount: number;
+  midTierCount: number;
+  bottomTierCount: number;
+  benchmarks: PeerBenchmarkResult[];
+}

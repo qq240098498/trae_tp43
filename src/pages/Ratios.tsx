@@ -12,6 +12,7 @@ import {
 import { cn } from '@/lib/utils';
 import type { RatioCategory, FinancialRatio, InterpretationLevel } from '@/types/financial';
 import type { LucideIcon } from 'lucide-react';
+import PeerBenchmark from '@/components/benchmark/PeerBenchmark';
 
 const categoryConfig: Record<RatioCategory, { label: string; icon: LucideIcon; color: string; desc: string }> = {
   solvency: { label: '偿债能力', icon: Shield, color: 'brand', desc: '评估企业偿还到期债务的能力' },
@@ -249,6 +250,10 @@ export default function Ratios() {
             </div>
           );
         })}
+
+      <div className="pt-6 mt-6 border-t border-neutral-200">
+        <PeerBenchmark />
+      </div>
     </div>
   );
 }
