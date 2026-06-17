@@ -112,6 +112,9 @@ function detectScale(revenue: number): { scale: CompanyScale; scaleLabel: string
 function createSubsidiary(
   id: string,
   name: string,
+  parentId: string | null,
+  level: number,
+  order: number,
   industry: IndustryCategory,
   description: string,
   financialData: {
@@ -152,6 +155,9 @@ function createSubsidiary(
   return {
     id,
     name,
+    parentId,
+    level,
+    order,
     industry,
     industryLabel: industryLabels[industry],
     scale,
@@ -166,6 +172,9 @@ export const mockSubsidiaries: SubsidiaryFinancialData[] = [
   createSubsidiary(
     'sub-eng',
     '工程机械事业部',
+    'group-parent',
+    1,
+    1,
     'manufacturing',
     '核心业务板块，专注于挖掘机、起重机等工程机械设备的研发、生产与销售，是集团主要收入和利润来源。',
     {
@@ -232,6 +241,9 @@ export const mockSubsidiaries: SubsidiaryFinancialData[] = [
   createSubsidiary(
     'sub-storage',
     '智能仓储设备子公司',
+    'group-parent',
+    1,
+    2,
     'manufacturing',
     '专注于自动化立体仓库、智能分拣系统等仓储物流设备的研发制造，是集团战略新兴业务板块，增长迅速。',
     {
@@ -298,6 +310,9 @@ export const mockSubsidiaries: SubsidiaryFinancialData[] = [
   createSubsidiary(
     'sub-parts',
     '精密零部件制造子公司',
+    'group-parent',
+    1,
+    3,
     'manufacturing',
     '为集团内部配套为主，同时对外销售高端液压件、传动部件等精密零部件，是产业链垂直整合的重要环节。',
     {
@@ -364,6 +379,9 @@ export const mockSubsidiaries: SubsidiaryFinancialData[] = [
   createSubsidiary(
     'sub-finance',
     '融资租赁子公司',
+    'group-parent',
+    1,
+    4,
     'finance',
     '为集团客户提供设备融资租赁、分期付款等金融服务，支持主业销售，同时开展第三方金融业务。',
     {
@@ -430,6 +448,9 @@ export const mockSubsidiaries: SubsidiaryFinancialData[] = [
   createSubsidiary(
     'sub-trade',
     '国际贸易子公司',
+    'group-parent',
+    1,
+    5,
     'retail',
     '负责集团产品的海外销售与国际采购，开展进出口贸易业务，开拓"一带一路"沿线市场。',
     {
@@ -503,4 +524,39 @@ export function recalculateSubsidiaryRatios(subsidiary: SubsidiaryFinancialData)
     ...subsidiary,
     ratios: calculateAllRatios(subsidiary.data),
   };
+}
+
+export function calculateGroupContributions(
+  subsidiaries: SubsidiaryFinancialData[],
+  groupRevenue: number,
+  groupProfit: number,
+  groupAssets: number
+): SubsidiaryFinancialData[] {
+  return subsidiaries.map((sub) => {
+    const subRevenue = sub.data.incomeStatements[sub.data.incomeStatements.length - 1]?.revenue ?? 0;
+    const subProfit = sub.data.incomeStatements[sub.data.incomeStatements.length - 1]?.netProfit ?? 0;
+    const subAssets = sub.data.balanceSheets[sub.data.balanceSheets.length - 1]?.totalAssets ?? 0;
+
+    return {
+      ...sub,
+      groupContribution: {
+        revenueRatio: groupRevenue > 0 ? subRevenue / groupRevenue : 0,
+        profitRatio: groupProfit > 0 ? subProfit / groupProfit : 0,
+        assetRatio: groupAssets > 0 ? subAssets / groupAssets : 0,
+      },
+    };
+  });
+}
+
+export function getSubsidiariesWithContributions(
+  groupRevenue: number,
+  groupProfit: number,
+  groupAssets: number
+): SubsidiaryFinancialData[] {
+  return calculateGroupContributions(
+    [...mockSubsidiaries],
+    groupRevenue,
+    groupProfit,
+    groupAssets
+  );
 }

@@ -8,7 +8,7 @@ import type {
   SubsidiaryFinancialData,
 } from '@/types/financial';
 import { mockFinancialData } from '@/data/mockStatements';
-import { mockSubsidiaries, recalculateSubsidiaryRatios } from '@/data/mockSubsidiaries';
+import { mockSubsidiaries, calculateGroupContributions, recalculateSubsidiaryRatios } from '@/data/mockSubsidiaries';
 import { calculateAllRatios } from '@/utils/financial/calculator';
 import { detectAllAnomalies } from '@/utils/financial/anomaly';
 import { validateAllData } from '@/utils/financial/validator';
@@ -78,7 +78,18 @@ export const useFinancialStore = create<FinancialState>((set, get) => {
   const initialRatios = calculateAllRatios(initialData);
   const initialAnomalies = detectAllAnomalies(initialData, initialRatios);
   const initialScore = calculateHealthScore(initialRatios);
-  const initialSubsidiaries = mockSubsidiaries.map((s) => ({ ...s }));
+
+  const latestIS = initialData.incomeStatements[initialData.incomeStatements.length - 1];
+  const latestBS = initialData.balanceSheets[initialData.balanceSheets.length - 1];
+  const groupRevenue = latestIS?.revenue ?? 0;
+  const groupProfit = latestIS?.netProfit ?? 0;
+  const groupAssets = latestBS?.totalAssets ?? 0;
+  const initialSubsidiaries = calculateGroupContributions(
+    mockSubsidiaries.map((s) => ({ ...s })),
+    groupRevenue,
+    groupProfit,
+    groupAssets
+  );
 
   return {
     data: initialData,

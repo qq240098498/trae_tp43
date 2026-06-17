@@ -15,6 +15,13 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Grid3X3,
+  ChevronRight,
+  PieChart,
+  Building,
+  Factory,
+  Landmark,
+  Globe2,
+  Box,
 } from 'lucide-react';
 import { useFinancialStore } from '@/store/useFinancialStore';
 import {
@@ -36,6 +43,7 @@ import type {
   PeerAnalysisSummary,
   SubsidiaryPeerAnalysis,
   PercentileLevel,
+  SubsidiaryFinancialData,
 } from '@/types/financial';
 import type { LucideIcon } from 'lucide-react';
 
@@ -67,6 +75,21 @@ function getPercentileBadgeClass(level: PercentileLevel): string {
       return 'bg-warn-500';
     case 'bottom25':
       return 'bg-danger-500';
+  }
+}
+
+function getSubsidiaryIcon(industry: string): LucideIcon {
+  switch (industry) {
+    case 'manufacturing':
+      return Factory;
+    case 'finance':
+      return Landmark;
+    case 'retail':
+      return Globe2;
+    case 'technology':
+      return Box;
+    default:
+      return Building;
   }
 }
 
@@ -334,71 +357,294 @@ function BenchmarkCard({ benchmark }: { benchmark: PeerBenchmarkResult }) {
   );
 }
 
-function SubsidiaryCard({
-  analysis,
-  isSelected,
-  onClick,
-}: {
-  analysis: SubsidiaryPeerAnalysis;
+interface TreeNodeProps {
+  id: string;
+  name: string;
+  level: number;
+  isParent: boolean;
   isSelected: boolean;
-  onClick: () => void;
-}) {
-  const { summary, subsidiaryName } = analysis;
-  const total = summary.benchmarks.length;
+  isExpanded: boolean;
+  hasChildren: boolean;
+  analysis: SubsidiaryPeerAnalysis | null;
+  groupSummary: PeerAnalysisSummary | null;
+  industryLabel: string;
+  scaleLabel: string;
+  contribution?: {
+    revenueRatio: number;
+    profitRatio: number;
+    assetRatio: number;
+  };
+  industry: string;
+  onToggle: (id: string) => void;
+  onSelect: (id: string) => void;
+}
 
-  const strongPct = total > 0 ? (summary.topTierCount / total) * 100 : 0;
-  const weakPct = total > 0 ? (summary.bottomTierCount / total) * 100 : 0;
+function TreeNode({
+  id,
+  name,
+  level,
+  isParent,
+  isSelected,
+  isExpanded,
+  hasChildren,
+  analysis,
+  groupSummary,
+  industryLabel,
+  scaleLabel,
+  contribution,
+  industry,
+  onToggle,
+  onSelect,
+}: TreeNodeProps) {
+  const Icon = isParent ? Layers : getSubsidiaryIcon(industry);
+  const summary = isParent ? groupSummary : analysis?.summary;
+  const topCount = summary?.topTierCount ?? 0;
+  const bottomCount = summary?.bottomTierCount ?? 0;
+  const total = summary?.benchmarks.length ?? 0;
+  const strongPct = total > 0 ? (topCount / total) * 100 : 0;
+  const weakPct = total > 0 ? (bottomCount / total) * 100 : 0;
+
+  const handleClick = () => {
+    if (isParent) {
+      onToggle(id);
+    } else {
+      onSelect(id);
+    }
+  };
 
   return (
-    <div
-      onClick={onClick}
-      className={cn(
-        'card-base p-4 cursor-pointer transition-all duration-300',
-        isSelected
-          ? 'ring-2 ring-brand-500 border-brand-300 shadow-lg'
-          : 'hover:shadow-card-hover hover:-translate-y-0.5'
-      )}
-    >
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <GitBranch className="w-4 h-4 text-brand-600 shrink-0" />
-            <h4 className="font-display font-semibold text-neutral-800 truncate">{subsidiaryName}</h4>
+    <div>
+      <div
+        onClick={handleClick}
+        className={cn(
+          'relative flex items-stretch cursor-pointer transition-all duration-300',
+          level === 0 ? 'mb-2' : 'mb-1'
+        )}
+      >
+        {level > 0 && (
+          <div className="flex items-stretch">
+            <div
+              className={cn(
+                'w-1 rounded-full mx-2 transition-colors',
+                isSelected ? 'bg-brand-500' : 'bg-neutral-200'
+              )}
+            />
           </div>
-          <p className="text-[11px] text-neutral-500">
-            {summary.industryInfo.industryLabel} · {summary.industryInfo.scaleLabel}
-          </p>
-        </div>
-        <div className="flex gap-1 ml-2">
-          {summary.topTierCount > 0 && (
-            <span className="chip !text-[10px] bg-accent-50 text-accent-700 border-accent-200">
-              <ArrowUpRight className="w-3 h-3 mr-0.5" />
-              {summary.topTierCount}
-            </span>
+        )}
+
+        <div
+          className={cn(
+            'flex-1 flex items-center gap-3 py-3 px-4 rounded-xl transition-all duration-300',
+            level === 0
+              ? 'bg-gradient-to-r from-brand-50 to-brand-100/50 border border-brand-200'
+              : 'bg-white border border-neutral-200 hover:border-brand-200',
+            isSelected && !isParent && 'ring-2 ring-brand-500 border-brand-400 shadow-md',
+            !isParent && 'hover:shadow-card-hover'
           )}
-          {summary.bottomTierCount > 0 && (
-            <span className="chip !text-[10px] bg-warn-50 text-warn-700 border-warn-200">
-              <ArrowDownRight className="w-3 h-3 mr-0.5" />
-              {summary.bottomTierCount}
-            </span>
+        >
+          <div
+            className={cn(
+              'p-2.5 rounded-xl shrink-0',
+              isParent
+                ? 'bg-brand-gradient text-white shadow-sm'
+                : 'bg-neutral-100 text-neutral-600'
+            )}
+          >
+            <Icon className="w-5 h-5" />
+          </div>
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-0.5">
+              <span
+                className={cn(
+                  'font-display font-semibold truncate',
+                  level === 0 ? 'text-lg text-brand-800' : 'text-neutral-800'
+                )}
+              >
+                {name}
+              </span>
+              {isParent && (
+                <span className="chip !text-[10px] bg-brand-100 text-brand-700 border-brand-200">
+                  <Users className="w-3 h-3 mr-0.5" />
+                  母公司
+                </span>
+              )}
+            </div>
+            <div className="text-[11px] text-neutral-500">
+              {industryLabel} · {scaleLabel}
+            </div>
+          </div>
+
+          <div className="hidden sm:block shrink-0 min-w-[120px] text-right">
+            {contribution && (
+              <div className="space-y-1">
+                <div className="flex items-center justify-end gap-1.5 text-[10px] text-neutral-500">
+                  <PieChart className="w-3 h-3" />
+                  <span>营收占比</span>
+                  <span className="font-mono font-semibold text-brand-600">
+                    {formatPercent(contribution.revenueRatio)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-end gap-1.5 text-[10px] text-neutral-500">
+                  <span>利润占比</span>
+                  <span className="font-mono font-semibold text-accent-600">
+                    {formatPercent(contribution.profitRatio)}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="shrink-0 flex items-center gap-1.5">
+            {topCount > 0 && (
+              <span className="chip !text-[10px] bg-accent-50 text-accent-700 border-accent-200">
+                <ArrowUpRight className="w-3 h-3 mr-0.5" />
+                {topCount}
+              </span>
+            )}
+            {bottomCount > 0 && (
+              <span className="chip !text-[10px] bg-warn-50 text-warn-700 border-warn-200">
+                <ArrowDownRight className="w-3 h-3 mr-0.5" />
+                {bottomCount}
+              </span>
+            )}
+          </div>
+
+          {hasChildren && isParent && (
+            <div className="shrink-0 ml-1">
+              {isExpanded ? (
+                <ChevronDown className="w-5 h-5 text-brand-600" />
+              ) : (
+                <ChevronRight className="w-5 h-5 text-brand-600" />
+              )}
+            </div>
+          )}
+          {!isParent && (
+            <div className="shrink-0 ml-1">
+              <ChevronRight className="w-4 h-4 text-neutral-400" />
+            </div>
           )}
         </div>
       </div>
 
-      <div className="relative h-2 bg-neutral-100 rounded-full overflow-hidden mb-2">
-        <div
-          className="absolute top-0 bottom-0 left-0 bg-accent-500 rounded-l-full"
-          style={{ width: `${strongPct}%` }}
-        />
-        <div
-          className="absolute top-0 bottom-0 bg-warn-500"
-          style={{ left: `${100 - weakPct}%`, width: `${weakPct}%` }}
-        />
+      {level > 0 && (
+        <div className="ml-5 mb-1">
+          <div className="h-1.5 bg-neutral-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-accent-500 rounded-l-full"
+              style={{ width: `${strongPct}%` }}
+            />
+            <div
+              className="h-full bg-warn-500"
+              style={{
+                left: `${100 - weakPct}%`,
+                width: `${weakPct}%`,
+                float: 'right',
+              }}
+            />
+          </div>
+          <div className="flex justify-between text-[10px] text-neutral-400 mt-0.5">
+            <span>领先 {strongPct.toFixed(0)}%</span>
+            <span>待改善 {weakPct.toFixed(0)}%</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OrgTreeView({
+  groupSummary,
+  subsidiaryAnalyses,
+  subsidiaries,
+  selectedId,
+  onSelect,
+}: {
+  groupSummary: PeerAnalysisSummary;
+  subsidiaryAnalyses: SubsidiaryPeerAnalysis[];
+  subsidiaries: SubsidiaryFinancialData[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(true);
+  const groupId = 'group-parent';
+
+  const sortedAnalyses = useMemo(
+    () => [...subsidiaryAnalyses].sort((a, b) => {
+      const subA = subsidiaries.find((s) => s.id === a.subsidiaryId);
+      const subB = subsidiaries.find((s) => s.id === b.subsidiaryId);
+      return (subA?.order ?? 0) - (subB?.order ?? 0);
+    }),
+    [subsidiaryAnalyses, subsidiaries]
+  );
+
+  const handleToggle = () => setExpanded(!expanded);
+
+  const handleSelect = (id: string) => {
+    onSelect(id);
+  };
+
+  return (
+    <div className="card-base p-4">
+      <div className="flex items-center gap-2 mb-4">
+        <GitBranch className="w-5 h-5 text-brand-600" />
+        <h3 className="font-display text-base font-semibold text-brand-700">
+          组织架构
+        </h3>
+        <span className="text-xs text-neutral-500">
+          点击子公司查看详细对标
+        </span>
       </div>
 
-      <div className="flex justify-between text-[10px] text-neutral-400">
-        <span>领先 {strongPct.toFixed(0)}%</span>
-        <span>待改善 {weakPct.toFixed(0)}%</span>
+      <div className="space-y-2">
+        <TreeNode
+          id={groupId}
+          name="蓝海智能装备集团"
+          level={0}
+          isParent={true}
+          isSelected={selectedId === null}
+          isExpanded={expanded}
+          hasChildren={sortedAnalyses.length > 0}
+          analysis={null}
+          groupSummary={groupSummary}
+          industryLabel={groupSummary.industryInfo.industryLabel}
+          scaleLabel={groupSummary.industryInfo.scaleLabel}
+          industry="manufacturing"
+          onToggle={handleToggle}
+          onSelect={() => onSelect('')}
+        />
+
+        {expanded && (
+          <div className="ml-4 mt-2 space-y-2 pl-2 border-l-2 border-dashed border-brand-200">
+            <div className="text-[10px] text-neutral-400 uppercase tracking-wider mb-2 ml-2">
+              子公司 / 业务板块
+            </div>
+            {sortedAnalyses.map((analysis) => {
+              const sub = subsidiaries.find((s) => s.id === analysis.subsidiaryId);
+              if (!sub) return null;
+              return (
+                <TreeNode
+                  key={analysis.subsidiaryId}
+                  id={analysis.subsidiaryId}
+                  name={analysis.subsidiaryName}
+                  level={1}
+                  isParent={false}
+                  isSelected={selectedId === analysis.subsidiaryId}
+                  isExpanded={false}
+                  hasChildren={false}
+                  analysis={analysis}
+                  groupSummary={null}
+                  industryLabel={analysis.summary.industryInfo.industryLabel}
+                  scaleLabel={analysis.summary.industryInfo.scaleLabel}
+                  contribution={sub.groupContribution}
+                  industry={sub.industry}
+                  onToggle={() => {}}
+                  onSelect={handleSelect}
+                />
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -532,6 +778,53 @@ function SubsidiaryComparisonTable({ analyses }: { analyses: SubsidiaryPeerAnaly
   );
 }
 
+function ContributionOverview({ subsidiaries }: { subsidiaries: SubsidiaryFinancialData[] }) {
+  const sorted = useMemo(
+    () =>
+      [...subsidiaries].sort(
+        (a, b) => (b.groupContribution?.revenueRatio ?? 0) - (a.groupContribution?.revenueRatio ?? 0)
+      ),
+    [subsidiaries]
+  );
+
+  return (
+    <div className="card-base p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <PieChart className="w-5 h-5 text-brand-600" />
+        <h3 className="font-display text-base font-semibold text-brand-700">
+          集团贡献度（按营收）
+        </h3>
+      </div>
+      <div className="space-y-3">
+        {sorted.map((sub, idx) => {
+          const ratio = sub.groupContribution?.revenueRatio ?? 0;
+          const Icon = getSubsidiaryIcon(sub.industry);
+          return (
+            <div key={sub.id} className="space-y-1">
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-xs text-neutral-400 w-4">{idx + 1}</span>
+                  <Icon className="w-4 h-4 text-neutral-500 shrink-0" />
+                  <span className="text-neutral-700 truncate">{sub.name}</span>
+                </div>
+                <span className="font-mono font-semibold text-brand-600 shrink-0 ml-2">
+                  {formatPercent(ratio)}
+                </span>
+              </div>
+              <div className="h-2 bg-neutral-100 rounded-full overflow-hidden ml-6">
+                <div
+                  className="h-full bg-gradient-to-r from-brand-400 to-brand-600 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(ratio * 100, 100)}%` }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function getSummaryAdvice(summary: PeerAnalysisSummary): string {
   const { topTierCount, bottomTierCount, benchmarks } = summary;
   const total = benchmarks.length;
@@ -572,13 +865,20 @@ export default function PeerBenchmark() {
     [subsidiaryAnalyses, selectedSubsidiaryId]
   );
 
-  const currentSummary = viewMode === 'group' ? groupSummary : selectedAnalysis?.summary || null;
+  const currentSummary = selectedSubsidiaryId
+    ? selectedAnalysis?.summary || null
+    : groupSummary;
+
+  const currentName = selectedSubsidiaryId
+    ? selectedAnalysis?.subsidiaryName || ''
+    : '集团整体';
 
   const groupAdvice = getSummaryAdvice(groupSummary);
 
-  const handleSubsidiaryClick = (id: string) => {
-    if (selectedSubsidiaryId === id) {
+  const handleSubsidiarySelect = (id: string) => {
+    if (id === '') {
       setSelectedSubsidiaryId(null);
+      setViewMode('group');
     } else {
       setSelectedSubsidiaryId(id);
       setViewMode('subsidiaries');
@@ -586,7 +886,7 @@ export default function PeerBenchmark() {
   };
 
   const viewModeTabs: { mode: ViewMode; label: string; icon: LucideIcon }[] = [
-    { mode: 'group', label: '集团整体', icon: Layers },
+    { mode: 'group', label: '集团概览', icon: Layers },
     { mode: 'subsidiaries', label: '子公司对标', icon: GitBranch },
     { mode: 'comparison', label: '横向对比', icon: Grid3X3 },
   ];
@@ -612,9 +912,6 @@ export default function PeerBenchmark() {
               key={tab.mode}
               onClick={() => {
                 setViewMode(tab.mode);
-                if (tab.mode !== 'subsidiaries') {
-                  setSelectedSubsidiaryId(null);
-                }
               }}
               className={cn(
                 'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all',
@@ -630,43 +927,125 @@ export default function PeerBenchmark() {
         })}
       </div>
 
-      {subsidiaries.length > 0 && (
-        <div className="animate-fade-in-up stagger-1">
-          <div className="flex items-center gap-2 mb-3">
-            <Building2 className="w-4 h-4 text-brand-600" />
-            <span className="text-sm font-medium text-brand-700">子公司/业务板块</span>
-            <span className="text-xs text-neutral-500">
-              点击可查看各子公司详细对标分析
-            </span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-            <SubsidiaryCard
-              analysis={{
-                subsidiaryId: 'group',
-                subsidiaryName: '集团合并',
-                summary: groupSummary,
-              }}
-              isSelected={viewMode === 'group'}
-              onClick={() => {
-                setViewMode('group');
-                setSelectedSubsidiaryId(null);
-              }}
-            />
-            {subsidiaryAnalyses.map((a) => (
-              <SubsidiaryCard
-                key={a.subsidiaryId}
-                analysis={a}
-                isSelected={selectedSubsidiaryId === a.subsidiaryId && viewMode === 'subsidiaries'}
-                onClick={() => handleSubsidiaryClick(a.subsidiaryId)}
+      {viewMode === 'group' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in-up stagger-1">
+          <div className="lg:col-span-2 space-y-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <SummaryCard
+                icon={Building2}
+                label="所属行业"
+                value={groupSummary.industryInfo.industryLabel}
+                subLabel={groupSummary.industryInfo.scaleLabel}
+                colorClass="bg-brand-100 text-brand-700"
               />
-            ))}
+              <SummaryCard
+                icon={Users}
+                label="对标样本"
+                value={`${groupSummary.totalPeers} 家`}
+                subLabel="含行业内上市公司"
+                colorClass="bg-accent-100 text-accent-700"
+              />
+              <SummaryCard
+                icon={Award}
+                label="领先指标"
+                value={`${groupSummary.topTierCount} 项`}
+                subLabel="行业前25%"
+                colorClass="bg-accent-100 text-accent-700"
+              />
+              <SummaryCard
+                icon={AlertTriangle}
+                label="待改善指标"
+                value={`${groupSummary.bottomTierCount} 项`}
+                subLabel="行业后50%"
+                colorClass="bg-warn-100 text-warn-700"
+              />
+            </div>
+
+            <div className="card-base p-5 border-l-4 border-l-brand-500">
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-lg bg-brand-100 text-brand-700 shrink-0">
+                  <Info className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-brand-700 mb-1">
+                    集团整体综合分析
+                  </div>
+                  <p className="text-sm text-neutral-700 leading-relaxed">{groupAdvice}</p>
+                </div>
+              </div>
+            </div>
+
+            {(strongSubs.length > 0 || weakSubs.length > 0) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {strongSubs.length > 0 && (
+                  <div className="card-base p-4 border-l-4 border-l-accent-500">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Award className="w-4 h-4 text-accent-600" />
+                      <span className="text-sm font-medium text-accent-700">优势子公司</span>
+                      <span className="text-xs text-neutral-500">
+                        60%以上指标行业领先
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {strongSubs.map((s) => (
+                        <div
+                          key={s.subsidiaryId}
+                          className="flex items-center justify-between text-sm"
+                        >
+                          <span className="text-neutral-700">{s.subsidiaryName}</span>
+                          <span className="chip !text-[10px] bg-accent-50 text-accent-700 border-accent-200">
+                            领先 {s.summary.topTierCount} 项
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {weakSubs.length > 0 && (
+                  <div className="card-base p-4 border-l-4 border-l-warn-500">
+                    <div className="flex items-center gap-2 mb-3">
+                      <AlertTriangle className="w-4 h-4 text-warn-600" />
+                      <span className="text-sm font-medium text-warn-700">需重点关注</span>
+                      <span className="text-xs text-neutral-500">
+                        50%以上指标落后行业
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {weakSubs.map((s) => (
+                        <div
+                          key={s.subsidiaryId}
+                          className="flex items-center justify-between text-sm"
+                        >
+                          <span className="text-neutral-700">{s.subsidiaryName}</span>
+                          <span className="chip !text-[10px] bg-warn-50 text-warn-700 border-warn-200">
+                            落后 {s.summary.bottomTierCount} 项
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-6">
+            <OrgTreeView
+              groupSummary={groupSummary}
+              subsidiaryAnalyses={subsidiaryAnalyses}
+              subsidiaries={subsidiaries}
+              selectedId={selectedSubsidiaryId}
+              onSelect={handleSubsidiarySelect}
+            />
+
+            <ContributionOverview subsidiaries={subsidiaries} />
           </div>
         </div>
       )}
 
       {viewMode === 'comparison' && (
-        <div className="animate-fade-in-up stagger-2">
-          <div className="flex items-center justify-between mb-3">
+        <div className="animate-fade-in-up stagger-2 space-y-6">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <BarChart3 className="w-5 h-5 text-brand-600" />
               <h3 className="font-display text-lg font-semibold text-brand-700">
@@ -675,10 +1054,21 @@ export default function PeerBenchmark() {
             </div>
           </div>
           <SubsidiaryComparisonTable analyses={subsidiaryAnalyses} />
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <ContributionOverview subsidiaries={subsidiaries} />
+            <OrgTreeView
+              groupSummary={groupSummary}
+              subsidiaryAnalyses={subsidiaryAnalyses}
+              subsidiaries={subsidiaries}
+              selectedId={selectedSubsidiaryId}
+              onSelect={handleSubsidiarySelect}
+            />
+          </div>
         </div>
       )}
 
-      {currentSummary && (viewMode === 'group' || viewMode === 'subsidiaries') && (
+      {viewMode === 'subsidiaries' && currentSummary && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 animate-fade-in-up stagger-2">
             <SummaryCard
@@ -718,71 +1108,16 @@ export default function PeerBenchmark() {
               </div>
               <div>
                 <div className="text-sm font-medium text-brand-700 mb-1">
-                  {viewMode === 'group' ? '集团整体' : selectedAnalysis?.subsidiaryName} 综合分析
+                  {currentName} 综合分析
                 </div>
                 <p className="text-sm text-neutral-700 leading-relaxed">
-                  {viewMode === 'group'
-                    ? groupAdvice
-                    : selectedAnalysis
+                  {selectedAnalysis
                     ? getSummaryAdvice(selectedAnalysis.summary)
-                    : ''}
+                    : groupAdvice}
                 </p>
               </div>
             </div>
           </div>
-
-          {viewMode === 'group' && (strongSubs.length > 0 || weakSubs.length > 0) && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in-up stagger-3">
-              {strongSubs.length > 0 && (
-                <div className="card-base p-4 border-l-4 border-l-accent-500">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Award className="w-4 h-4 text-accent-600" />
-                    <span className="text-sm font-medium text-accent-700">优势子公司</span>
-                    <span className="text-xs text-neutral-500">
-                      60%以上指标行业领先
-                    </span>
-                  </div>
-                  <div className="space-y-2">
-                    {strongSubs.map((s) => (
-                      <div
-                        key={s.subsidiaryId}
-                        className="flex items-center justify-between text-sm"
-                      >
-                        <span className="text-neutral-700">{s.subsidiaryName}</span>
-                        <span className="chip !text-[10px] bg-accent-50 text-accent-700 border-accent-200">
-                          领先 {s.summary.topTierCount} 项
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {weakSubs.length > 0 && (
-                <div className="card-base p-4 border-l-4 border-l-warn-500">
-                  <div className="flex items-center gap-2 mb-3">
-                    <AlertTriangle className="w-4 h-4 text-warn-600" />
-                    <span className="text-sm font-medium text-warn-700">需重点关注</span>
-                    <span className="text-xs text-neutral-500">
-                      50%以上指标落后行业
-                    </span>
-                  </div>
-                  <div className="space-y-2">
-                    {weakSubs.map((s) => (
-                      <div
-                        key={s.subsidiaryId}
-                        className="flex items-center justify-between text-sm"
-                      >
-                        <span className="text-neutral-700">{s.subsidiaryName}</span>
-                        <span className="chip !text-[10px] bg-warn-50 text-warn-700 border-warn-200">
-                          落后 {s.summary.bottomTierCount} 项
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
 
           <div className="animate-fade-in-up stagger-4">
             <div className="flex items-center gap-2 mb-3">

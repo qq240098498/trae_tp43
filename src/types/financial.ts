@@ -158,6 +158,9 @@ export interface HealthScore {
 export interface SubsidiaryFinancialData {
   id: string;
   name: string;
+  parentId: string | null;
+  level: number;
+  order: number;
   industry: IndustryCategory;
   industryLabel: string;
   scale: CompanyScale;
@@ -165,12 +168,32 @@ export interface SubsidiaryFinancialData {
   description: string;
   data: FinancialData;
   ratios: FinancialRatio[];
+  groupContribution?: {
+    revenueRatio: number;
+    profitRatio: number;
+    assetRatio: number;
+  };
+}
+
+export interface GroupCompanyStructure {
+  parent: {
+    id: string;
+    name: string;
+  };
+  subsidiaries: SubsidiaryFinancialData[];
 }
 
 export interface SubsidiaryPeerAnalysis {
   subsidiaryId: string;
   subsidiaryName: string;
+  parentId: string | null;
+  level: number;
   summary: PeerAnalysisSummary;
+  groupContribution?: {
+    revenueRatio: number;
+    profitRatio: number;
+    assetRatio: number;
+  };
 }
 
 export type IndustryCategory =

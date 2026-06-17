@@ -261,6 +261,8 @@ export function runSubsidiaryBenchmarkAnalysis(
   return {
     subsidiaryId: subsidiary.id,
     subsidiaryName: subsidiary.name,
+    parentId: subsidiary.parentId,
+    level: subsidiary.level,
     summary: {
       industryInfo,
       totalPeers: peers.length,
@@ -269,6 +271,7 @@ export function runSubsidiaryBenchmarkAnalysis(
       bottomTierCount,
       benchmarks,
     },
+    groupContribution: subsidiary.groupContribution,
   };
 }
 
