@@ -155,6 +155,24 @@ export interface HealthScore {
   level: InterpretationLevel;
 }
 
+export interface SubsidiaryFinancialData {
+  id: string;
+  name: string;
+  industry: IndustryCategory;
+  industryLabel: string;
+  scale: CompanyScale;
+  scaleLabel: string;
+  description: string;
+  data: FinancialData;
+  ratios: FinancialRatio[];
+}
+
+export interface SubsidiaryPeerAnalysis {
+  subsidiaryId: string;
+  subsidiaryName: string;
+  summary: PeerAnalysisSummary;
+}
+
 export type IndustryCategory =
   | 'manufacturing'
   | 'retail'

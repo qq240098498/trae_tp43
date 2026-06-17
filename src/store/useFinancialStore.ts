@@ -5,8 +5,10 @@ import type {
   AnomalyRecord,
   ValidationResult,
   HealthScore,
+  SubsidiaryFinancialData,
 } from '@/types/financial';
 import { mockFinancialData } from '@/data/mockStatements';
+import { mockSubsidiaries, recalculateSubsidiaryRatios } from '@/data/mockSubsidiaries';
 import { calculateAllRatios } from '@/utils/financial/calculator';
 import { detectAllAnomalies } from '@/utils/financial/anomaly';
 import { validateAllData } from '@/utils/financial/validator';
@@ -27,6 +29,8 @@ interface FinancialState {
     numerator?: { label: string; value: number; source: string };
     denominator?: { label: string; value: number; source: string };
   } | null;
+  subsidiaries: SubsidiaryFinancialData[];
+  selectedSubsidiaryId: string | null;
 
   recalculateAll: () => void;
   setData: (data: FinancialData) => void;
@@ -38,6 +42,8 @@ interface FinancialState {
   importFromJSON: (json: string) => boolean;
   exportToJSON: () => string;
   resetToMock: () => void;
+  setSelectedSubsidiaryId: (id: string | null) => void;
+  updateSubsidiaryData: (id: string, data: FinancialData) => void;
 }
 
 const STORAGE_KEY = 'financial-analyzer-data-v1';
@@ -72,6 +78,7 @@ export const useFinancialStore = create<FinancialState>((set, get) => {
   const initialRatios = calculateAllRatios(initialData);
   const initialAnomalies = detectAllAnomalies(initialData, initialRatios);
   const initialScore = calculateHealthScore(initialRatios);
+  const initialSubsidiaries = mockSubsidiaries.map((s) => ({ ...s }));
 
   return {
     data: initialData,
@@ -82,6 +89,8 @@ export const useFinancialStore = create<FinancialState>((set, get) => {
     selectedPeriodIndex: 0,
     sourcePanelOpen: false,
     sourcePanelContent: null,
+    subsidiaries: initialSubsidiaries,
+    selectedSubsidiaryId: null,
 
     recalculateAll: () => {
       const data = get().data;
@@ -153,7 +162,21 @@ export const useFinancialStore = create<FinancialState>((set, get) => {
         selectedPeriodIndex: 0,
         sourcePanelOpen: false,
         sourcePanelContent: null,
+        subsidiaries: mockSubsidiaries.map((s) => ({ ...s })),
+        selectedSubsidiaryId: null,
       });
+    },
+
+    setSelectedSubsidiaryId: (id) => set({ selectedSubsidiaryId: id }),
+
+    updateSubsidiaryData: (id, data) => {
+      set((state) => ({
+        subsidiaries: state.subsidiaries.map((sub) => {
+          if (sub.id !== id) return sub;
+          const updated = { ...sub, data };
+          return recalculateSubsidiaryRatios(updated);
+        }),
+      }));
     },
   };
 });

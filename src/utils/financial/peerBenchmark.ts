@@ -6,6 +6,8 @@ import type {
   FinancialData,
   PercentileLevel,
   IndustryInfo,
+  SubsidiaryFinancialData,
+  SubsidiaryPeerAnalysis,
 } from '@/types/financial';
 import { getPeerCompaniesByIndustry, detectIndustryInfo } from '@/data/mockPeerCompanies';
 import { getLatestPair } from './calculator';
@@ -212,4 +214,88 @@ export function runPeerBenchmarkAnalysis(
     bottomTierCount,
     benchmarks,
   };
+}
+
+export function runSubsidiaryBenchmarkAnalysis(
+  subsidiary: SubsidiaryFinancialData
+): SubsidiaryPeerAnalysis {
+  const industryInfo: IndustryInfo = {
+    industry: subsidiary.industry,
+    industryLabel: subsidiary.industryLabel,
+    scale: subsidiary.scale,
+    scaleLabel: subsidiary.scaleLabel,
+  };
+
+  const peers = getPeerCompaniesByIndustry(subsidiary.industry, subsidiary.scale);
+
+  const ratioIdToValue = new Map<string, number | null>();
+  for (const r of subsidiary.ratios) {
+    ratioIdToValue.set(r.id, r.value);
+  }
+
+  const targetRatioIds = Object.keys(BENCHMARK_RATIO_CONFIG);
+  const benchmarks: PeerBenchmarkResult[] = [];
+
+  for (const id of targetRatioIds) {
+    const companyVal = ratioIdToValue.get(id);
+    const result = calculateBenchmarkForRatio(id, companyVal ?? null, peers);
+    if (result) {
+      benchmarks.push(result);
+    }
+  }
+
+  let topTierCount = 0;
+  let midTierCount = 0;
+  let bottomTierCount = 0;
+
+  for (const b of benchmarks) {
+    if (b.percentileLevel === 'top10' || b.percentileLevel === 'top25') {
+      topTierCount++;
+    } else if (b.percentileLevel === 'top50') {
+      midTierCount++;
+    } else {
+      bottomTierCount++;
+    }
+  }
+
+  return {
+    subsidiaryId: subsidiary.id,
+    subsidiaryName: subsidiary.name,
+    summary: {
+      industryInfo,
+      totalPeers: peers.length,
+      topTierCount,
+      midTierCount,
+      bottomTierCount,
+      benchmarks,
+    },
+  };
+}
+
+export function runAllSubsidiariesBenchmarkAnalysis(
+  subsidiaries: SubsidiaryFinancialData[]
+): SubsidiaryPeerAnalysis[] {
+  return subsidiaries.map((sub) => runSubsidiaryBenchmarkAnalysis(sub));
+}
+
+export function findWeakSubsidiaries(
+  analyses: SubsidiaryPeerAnalysis[],
+  threshold = 0.5
+): SubsidiaryPeerAnalysis[] {
+  return analyses.filter((a) => {
+    const total = a.summary.benchmarks.length;
+    if (total === 0) return false;
+    return a.summary.bottomTierCount / total >= threshold;
+  });
+}
+
+export function findStrongSubsidiaries(
+  analyses: SubsidiaryPeerAnalysis[],
+  threshold = 0.6
+): SubsidiaryPeerAnalysis[] {
+  return analyses.filter((a) => {
+    const total = a.summary.benchmarks.length;
+    if (total === 0) return false;
+    return a.summary.topTierCount / total >= threshold;
+  });
 }
