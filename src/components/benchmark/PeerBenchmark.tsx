@@ -52,6 +52,7 @@ import type {
   PercentileLevel,
   SubsidiaryFinancialData,
   AnomalyRecord,
+  AnomalySeverity,
 } from '@/types/financial';
 import type { LucideIcon } from 'lucide-react';
 
@@ -135,6 +136,8 @@ function getSeverityLabel(severity: string): string {
       return '显著偏离';
     case 'notice':
       return '轻度偏离';
+    case 'all':
+      return '全部';
     default:
       return '正常';
   }
@@ -142,10 +145,46 @@ function getSeverityLabel(severity: string): string {
 
 function AnomalyWarningCard({ anomalies }: { anomalies: AnomalyRecord[] }) {
   const [expanded, setExpanded] = useState(false);
+  const [selectedSeverity, setSelectedSeverity] = useState<AnomalySeverity | 'all'>('all');
   const summary = getMeanDeviationAnomalySummary(anomalies);
   const meanDevAnomalies = anomalies.filter((a) => a.anomalyType === 'mean-deviation');
 
+  const filteredAnomalies = useMemo(() => {
+    if (selectedSeverity === 'all') return meanDevAnomalies;
+    return meanDevAnomalies.filter((a) => a.severity === selectedSeverity);
+  }, [meanDevAnomalies, selectedSeverity]);
+
   if (summary.total === 0) return null;
+
+  const handleSeverityClick = (severity: AnomalySeverity | 'all') => {
+    setSelectedSeverity(severity);
+    if (!expanded) setExpanded(true);
+  };
+
+  const getSeverityChipClass = (severity: AnomalySeverity | 'all', isActive: boolean) => {
+    if (isActive) {
+      switch (severity) {
+        case 'critical':
+          return 'bg-danger-500 text-white border-danger-500';
+        case 'warning':
+          return 'bg-warn-500 text-white border-warn-500';
+        case 'notice':
+          return 'bg-neutral-500 text-white border-neutral-500';
+        case 'all':
+          return 'bg-brand-500 text-white border-brand-500';
+      }
+    }
+    switch (severity) {
+      case 'critical':
+        return 'bg-danger-50 text-danger-700 border-danger-200 hover:bg-danger-100';
+      case 'warning':
+        return 'bg-warn-50 text-warn-700 border-warn-200 hover:bg-warn-100';
+      case 'notice':
+        return 'bg-neutral-100 text-neutral-600 border-neutral-200 hover:bg-neutral-200';
+      case 'all':
+        return 'bg-brand-50 text-brand-700 border-brand-200 hover:bg-brand-100';
+    }
+  };
 
   return (
     <div className="card-base p-5 border-l-4 border-l-danger-500 animate-fade-in-up">
@@ -163,21 +202,48 @@ function AnomalyWarningCard({ anomalies }: { anomalies: AnomalyRecord[] }) {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+          <button
+            onClick={() => handleSeverityClick('all')}
+            className={cn(
+              'chip !text-[10px] cursor-pointer transition-all',
+              getSeverityChipClass('all', selectedSeverity === 'all')
+            )}
+          >
+            全部 {summary.total}
+          </button>
           {summary.critical > 0 && (
-            <span className="chip !text-[10px] bg-danger-50 text-danger-700 border-danger-200">
+            <button
+              onClick={() => handleSeverityClick('critical')}
+              className={cn(
+                'chip !text-[10px] cursor-pointer transition-all',
+                getSeverityChipClass('critical', selectedSeverity === 'critical')
+              )}
+            >
               严重 {summary.critical}
-            </span>
+            </button>
           )}
           {summary.warning > 0 && (
-            <span className="chip !text-[10px] bg-warn-50 text-warn-700 border-warn-200">
+            <button
+              onClick={() => handleSeverityClick('warning')}
+              className={cn(
+                'chip !text-[10px] cursor-pointer transition-all',
+                getSeverityChipClass('warning', selectedSeverity === 'warning')
+              )}
+            >
               显著 {summary.warning}
-            </span>
+            </button>
           )}
           {summary.notice > 0 && (
-            <span className="chip !text-[10px] bg-neutral-100 text-neutral-600 border-neutral-200">
+            <button
+              onClick={() => handleSeverityClick('notice')}
+              className={cn(
+                'chip !text-[10px] cursor-pointer transition-all',
+                getSeverityChipClass('notice', selectedSeverity === 'notice')
+              )}
+            >
               轻度 {summary.notice}
-            </span>
+            </button>
           )}
         </div>
       </div>
@@ -189,6 +255,11 @@ function AnomalyWarningCard({ anomalies }: { anomalies: AnomalyRecord[] }) {
         <span className="flex items-center gap-1.5">
           <AlertTriangle className="w-3.5 h-3.5" />
           查看异常指标详情
+          {selectedSeverity !== 'all' && (
+            <span className="text-brand-600">
+              （已筛选：{getSeverityLabel(selectedSeverity)} {filteredAnomalies.length}项）
+            </span>
+          )}
         </span>
         {expanded ? (
           <ChevronUp className="w-4 h-4" />
@@ -199,96 +270,102 @@ function AnomalyWarningCard({ anomalies }: { anomalies: AnomalyRecord[] }) {
 
       {expanded && (
         <div className="mt-3 space-y-3 animate-fade-in-up">
-          {meanDevAnomalies.map((anomaly) => (
-            <div
-              key={anomaly.id}
-              className="p-3 rounded-lg bg-neutral-50 border border-neutral-200 hover:border-danger-200 transition-colors"
-            >
-              <div className="flex items-start justify-between gap-3 mb-2">
-                <div className="flex items-center gap-2 min-w-0">
+          {filteredAnomalies.length === 0 ? (
+            <div className="p-4 text-center text-xs text-neutral-400">
+              暂无{getSeverityLabel(selectedSeverity)}级别的异常
+            </div>
+          ) : (
+            filteredAnomalies.map((anomaly) => (
+              <div
+                key={anomaly.id}
+                className="p-3 rounded-lg bg-neutral-50 border border-neutral-200 hover:border-danger-200 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className={cn(
+                        'w-2 h-2 rounded-full shrink-0',
+                        getSeverityColorClass(anomaly.severity)
+                      )}
+                    />
+                    <span className="font-medium text-neutral-800 text-sm truncate">
+                      {anomaly.indicatorName}
+                    </span>
+                    <span
+                      className={cn(
+                        'chip !text-[10px] shrink-0',
+                        anomaly.severity === 'critical'
+                          ? 'bg-danger-50 text-danger-700 border-danger-200'
+                          : anomaly.severity === 'warning'
+                          ? 'bg-warn-50 text-warn-700 border-warn-200'
+                          : 'bg-neutral-100 text-neutral-600 border-neutral-200'
+                      )}
+                    >
+                      {getSeverityLabel(anomaly.severity)}
+                    </span>
+                  </div>
                   <span
                     className={cn(
-                      'w-2 h-2 rounded-full shrink-0',
-                      getSeverityColorClass(anomaly.severity)
-                    )}
-                  />
-                  <span className="font-medium text-neutral-800 text-sm truncate">
-                    {anomaly.indicatorName}
-                  </span>
-                  <span
-                    className={cn(
-                      'chip !text-[10px] shrink-0',
-                      anomaly.severity === 'critical'
-                        ? 'bg-danger-50 text-danger-700 border-danger-200'
-                        : anomaly.severity === 'warning'
-                        ? 'bg-warn-50 text-warn-700 border-warn-200'
-                        : 'bg-neutral-100 text-neutral-600 border-neutral-200'
+                      'font-mono text-sm font-bold shrink-0',
+                      getSeverityTextClass(anomaly.severity)
                     )}
                   >
-                    {getSeverityLabel(anomaly.severity)}
+                    {anomaly.deviationFromMean && anomaly.deviationFromMean >= 0
+                      ? '+'
+                      : ''}
+                    {formatPercent(anomaly.deviationFromMean ?? 0)}
                   </span>
                 </div>
-                <span
-                  className={cn(
-                    'font-mono text-sm font-bold shrink-0',
-                    getSeverityTextClass(anomaly.severity)
-                  )}
-                >
-                  {anomaly.deviationFromMean && anomaly.deviationFromMean >= 0
-                    ? '+'
-                    : ''}
-                  {formatPercent(anomaly.deviationFromMean ?? 0)}
-                </span>
-              </div>
 
-              <div className="grid grid-cols-3 gap-2 mb-3 text-xs">
-                <div>
-                  <div className="text-neutral-400 mb-0.5">本期值</div>
-                  <div className="font-mono font-semibold text-neutral-700">
-                    {formatNumber(anomaly.currentValue)}
+                <div className="grid grid-cols-3 gap-2 mb-3 text-xs">
+                  <div>
+                    <div className="text-neutral-400 mb-0.5">本期值</div>
+                    <div className="font-mono font-semibold text-neutral-700">
+                      {formatNumber(anomaly.currentValue)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-neutral-400 mb-0.5">历史均值</div>
+                    <div className="font-mono font-semibold text-neutral-700">
+                      {formatNumber(anomaly.historicalMean ?? 0)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-neutral-400 mb-0.5">标准差</div>
+                    <div className="font-mono font-semibold text-neutral-700">
+                      {formatNumber(anomaly.historicalStdDev ?? 0)}
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <div className="text-neutral-400 mb-0.5">历史均值</div>
-                  <div className="font-mono font-semibold text-neutral-700">
-                    {formatNumber(anomaly.historicalMean ?? 0)}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-neutral-400 mb-0.5">标准差</div>
-                  <div className="font-mono font-semibold text-neutral-700">
-                    {formatNumber(anomaly.historicalStdDev ?? 0)}
-                  </div>
-                </div>
-              </div>
 
-              <div className="pt-2 border-t border-neutral-200">
-                <div className="flex items-center gap-1.5 text-[11px] font-medium text-neutral-600 mb-1.5">
-                  <Search className="w-3 h-3" />
-                  可能的驱动因素
+                <div className="pt-2 border-t border-neutral-200">
+                  <div className="flex items-center gap-1.5 text-[11px] font-medium text-neutral-600 mb-1.5">
+                    <Search className="w-3 h-3" />
+                    可能的驱动因素
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {anomaly.possibleReasons.slice(0, 3).map((reason, idx) => (
+                      <span
+                        key={idx}
+                        className="text-[10px] px-2 py-0.5 rounded-md bg-neutral-100 text-neutral-600 border border-neutral-200"
+                      >
+                        {reason}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {anomaly.possibleReasons.slice(0, 3).map((reason, idx) => (
-                    <span
-                      key={idx}
-                      className="text-[10px] px-2 py-0.5 rounded-md bg-neutral-100 text-neutral-600 border border-neutral-200"
-                    >
-                      {reason}
+
+                <div className="mt-2 pt-2 border-t border-neutral-200">
+                  <div className="text-[11px] text-neutral-500 flex items-start gap-1.5">
+                    <Info className="w-3 h-3 mt-0.5 shrink-0 text-neutral-400" />
+                    <span>
+                      基于 {anomaly.sampleCount} 期历史数据分析，建议进一步核查{anomaly.indicatorName}变动原因，关注是否存在政策变更、业务调整或异常交易等情况。
                     </span>
-                  ))}
+                  </div>
                 </div>
               </div>
-
-              <div className="mt-2 pt-2 border-t border-neutral-200">
-                <div className="text-[11px] text-neutral-500 flex items-start gap-1.5">
-                  <Info className="w-3 h-3 mt-0.5 shrink-0 text-neutral-400" />
-                  <span>
-                    基于 {anomaly.sampleCount} 期历史数据分析，建议进一步核查{anomaly.indicatorName}变动原因，关注是否存在政策变更、业务调整或异常交易等情况。
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       )}
     </div>
